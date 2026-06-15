@@ -583,14 +583,31 @@ function scanLoop(){
   const video=document.getElementById('qrVideo');
   const canvas=document.getElementById('qrCanvas');
   if(video.readyState===video.HAVE_ENOUGH_DATA){
-    canvas.width=video.videoWidth;
-    canvas.height=video.videoHeight;
+    const vw=video.videoWidth, vh=video.videoHeight;
+    // 중앙 80% 영역만 크롭해서 인식률 향상
+    const cropSize=Math.min(vw,vh)*0.8;
+    const cx=(vw-cropSize)/2, cy=(vh-cropSize)/2;
+    canvas.width=cropSize; canvas.height=cropSize;
     const ctx=canvas.getContext('2d');
-    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    ctx.drawImage(video,cx,cy,cropSize,cropSize,0,0,cropSize,cropSize);
+
+    // 밝기/대비 보정
     const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
-    const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:'dontInvert'});
+    const d=imgData.data;
+    for(let i=0;i<d.length;i+=4){
+      // 그레이스케일 + 대비 강화
+      const avg=(d[i]+d[i+1]+d[i+2])/3;
+      const v=avg>128?Math.min(255,avg*1.2):Math.max(0,avg*0.8);
+      d[i]=d[i+1]=d[i+2]=v;
+    }
+    ctx.putImageData(imgData,0,0);
+    const enhanced=ctx.getImageData(0,0,canvas.width,canvas.height);
+
+    // 일반 + 반전 둘 다 시도
+    let code=jsQR(enhanced.data,canvas.width,canvas.height,{inversionAttempts:'attemptBoth'});
     if(code){
       qrDone=true;
+      if(navigator.vibrate)navigator.vibrate(100);
       handleQRResult(code.data);
       return;
     }
