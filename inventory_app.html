@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>재고 관리 시스템</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f2557">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="재고관리">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0f2f5;color:#1a2340;font-size:14px}
+
+/* Header */
+.header{background:linear-gradient(135deg,#0f2557,#1a3a8f);color:white;padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+.header-icon{font-size:22px}
+.header h1{font-size:17px;font-weight:700}
+.header p{font-size:11px;opacity:0.7;margin-top:1px}
+
+/* Dashboard */
+.dashboard{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 14px 0}
+.card{background:white;border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-left:4px solid #1a3a8f}
+.card.warn{border-left-color:#e67e22}.card.ok{border-left-color:#27ae60}.card.info{border-left-color:#8e44ad}
+.card-label{font-size:10px;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:0.4px}
+.card-value{font-size:24px;font-weight:800;color:#0f2557;margin-top:3px}
+.card.warn .card-value{color:#e67e22}.card.ok .card-value{color:#27ae60}.card.info .card-value{color:#8e44ad}
+
+/* Upload */
+.upload-area{margin:14px}
+.drop-zone{border:2px dashed #b0bcd4;border-radius:12px;background:white;padding:32px 20px;text-align:center;cursor:pointer}
+.drop-zone .icon{font-size:38px;margin-bottom:10px}
+.drop-zone p{color:#555;font-size:14px;line-height:1.5}
+.drop-zone span{color:#1a3a8f;font-weight:700}
+.drop-zone small{color:#999;font-size:11px;display:block;margin-top:6px}
+.upload-btn{display:block;width:100%;margin-top:14px;padding:15px;background:#1a3a8f;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer}
+#fileInput{display:none}
+
+/* Controls */
+.controls{padding:12px 14px 0;display:none;flex-direction:column;gap:8px}
+.search-wrap{position:relative}
+.search-wrap input{width:100%;padding:12px 14px 12px 40px;border:1px solid #d0d8e8;border-radius:10px;font-size:14px;background:white;outline:none;-webkit-appearance:none}
+.search-wrap input:focus{border-color:#1a3a8f;box-shadow:0 0 0 3px rgba(26,58,143,0.1)}
+.search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#999;font-size:16px}
+.filter-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+select{padding:11px 10px;border:1px solid #d0d8e8;border-radius:10px;font-size:13px;background:white;outline:none;width:100%;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{padding:11px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center}
+.btn-primary{background:#1a3a8f;color:white}
+.btn-outline{background:white;color:#1a3a8f;border:1px solid #1a3a8f}
+
+/* Table wrap */
+.table-wrap{margin:12px 14px 20px;background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08);overflow:hidden;display:none}
+.table-header{padding:12px 14px;border-bottom:1px solid #eef0f5;display:flex;justify-content:space-between;align-items:center}
+.table-header span{font-size:12px;color:#666}
+.table-header strong{color:#0f2557}
+
+/* Card list for mobile */
+.item-list{padding:0}
+.item-card{padding:14px;border-bottom:1px solid #f0f2f7;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background 0.15s}
+.item-card:active{background:#f8faff}
+.item-card:last-child{border-bottom:none}
+.item-main{flex:1;min-width:0}
+.item-code{font-size:11px;color:#888;font-family:monospace;margin-bottom:2px}
+.item-name{font-size:14px;font-weight:700;color:#0f2557;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-spec{font-size:11px;color:#999;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-right{text-align:right;flex-shrink:0}
+.item-qty{font-size:18px;font-weight:800;color:#0f2557}
+.item-unit{font-size:11px;color:#999}
+.badge{display:inline-block;padding:3px 8px;border-radius:12px;font-size:10px;font-weight:700;margin-top:4px}
+.badge-low{background:#fdecea;color:#c0392b}
+.badge-ok{background:#eafaf1;color:#1e8449}
+.badge-high{background:#eaf4ff;color:#1a5ca8}
+.badge-zero{background:#f5f5f5;color:#999}
+
+/* Pagination */
+.pagination{display:flex;justify-content:center;align-items:center;gap:6px;padding:12px;border-top:1px solid #eef0f5;flex-wrap:wrap}
+.page-btn{padding:8px 14px;border:1px solid #d0d8e8;border-radius:8px;background:white;cursor:pointer;font-size:13px;min-width:40px;text-align:center}
+.page-btn.active{background:#1a3a8f;color:white;border-color:#1a3a8f;font-weight:700}
+
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:flex-end;justify-content:center}
+.modal-bg.show{display:flex}
+.modal{background:white;border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom)}
+.modal-head{background:linear-gradient(135deg,#0f2557,#1a3a8f);color:white;padding:16px 18px;border-radius:20px 20px 0 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0}
+.modal-head h3{font-size:15px;font-weight:700;flex:1;margin-right:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal-close{background:rgba(255,255,255,0.2);border:none;color:white;font-size:20px;cursor:pointer;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.modal-body{padding:16px}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.detail-item label{font-size:10px;color:#888;font-weight:700;text-transform:uppercase;display:block;margin-bottom:2px}
+.detail-item span{font-size:13px;color:#1a2340;font-weight:500}
+.section-title{font-size:13px;font-weight:700;color:#0f2557;margin:14px 0 10px;border-top:1px solid #eef0f5;padding-top:12px}
+.inout-form{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.inout-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.inout-form label{font-size:11px;color:#666;font-weight:700;display:block;margin-bottom:4px}
+.inout-form input,.inout-form select{padding:11px 12px;border:1px solid #d0d8e8;border-radius:8px;font-size:14px;width:100%;-webkit-appearance:none}
+.inout-form .btn{padding:13px;font-size:14px;border-radius:10px;width:100%}
+.history-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f2f7}
+.history-item:last-child{border-bottom:none}
+.history-left .h-type{font-size:12px;font-weight:700}
+.history-left .h-type.in{color:#27ae60}
+.history-left .h-type.out{color:#e74c3c}
+.history-left .h-time{font-size:10px;color:#aaa;margin-top:2px}
+.history-left .h-memo{font-size:11px;color:#888;margin-top:1px}
+.history-right{text-align:right}
+.history-right .h-qty{font-size:15px;font-weight:800}
+.history-right .h-qty.in{color:#27ae60}
+.history-right .h-qty.out{color:#e74c3c}
+.history-right .h-after{font-size:11px;color:#aaa}
+
+/* Map Modal */
+.map-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:flex-end;justify-content:center}
+.map-modal-bg.show{display:flex}
+.map-modal{background:white;border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:92vh;overflow-y:auto}
+.map-modal-head{background:linear-gradient(135deg,#0f2557,#1a3a8f);color:white;padding:16px 18px;border-radius:20px 20px 0 0;position:sticky;top:0}
+.map-modal-head h3{font-size:15px;font-weight:700}
+.map-modal-head p{font-size:11px;opacity:0.7;margin-top:3px}
+.map-modal-body{padding:16px}
+.col-map-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f2f7}
+.col-map-item:last-child{border-bottom:none}
+.col-map-item label{font-size:12px;color:#555;font-weight:700;width:90px;flex-shrink:0}
+.col-map-item select{flex:1;padding:9px 10px;border:1px solid #d0d8e8;border-radius:8px;font-size:12px;background:white;-webkit-appearance:none}
+.apply-btn{display:block;width:100%;padding:15px;background:#1a3a8f;color:white;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:16px}
+
+.empty{text-align:center;padding:50px 20px;color:#aaa}
+.empty .empty-icon{font-size:44px;margin-bottom:10px}
+
+@media(min-width:600px){
+  .dashboard{grid-template-columns:repeat(4,1fr)}
+  .filter-row{grid-template-columns:repeat(3,1fr)}
+  .btn-row{grid-template-columns:repeat(3,1fr)}
+  .modal-bg,.map-modal-bg{align-items:center}
+  .modal,.map-modal{border-radius:14px;max-height:85vh}
+  .modal-head,.map-modal-head{border-radius:14px 14px 0 0}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">📦</div>
+  <div>
+    <h1>재고 관리 시스템</h1>
+    <p>ERP 엑셀/CSV 파일 기반</p>
+  </div>
+</div>
+
+<div class="dashboard">
+  <div class="card"><div class="card-label">총 품목</div><div class="card-value" id="totalItems">-</div></div>
+  <div class="card ok"><div class="card-label">총 재고량</div><div class="card-value" id="totalQty">-</div></div>
+  <div class="card warn"><div class="card-label">부족 품목</div><div class="card-value" id="lowItems">-</div></div>
+  <div class="card info"><div class="card-label">분류 수</div><div class="card-value" id="categories">-</div></div>
+</div>
+
+<div class="upload-area" id="uploadArea">
+  <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+    <div class="icon">📁</div>
+    <p><span>파일을 탭</span>해서 업로드하세요<br>또는 드래그 앤 드롭</p>
+    <small>지원: .xlsx, .xls, .csv (ERP 내보내기)</small>
+  </div>
+  <button class="upload-btn" onclick="document.getElementById('fileInput').click()">📂 파일 선택하기</button>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+</div>
+
+<div class="controls" id="controls">
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="품목코드, 품목명, 규격 검색..." oninput="applyFilter()">
+  </div>
+  <div class="filter-row">
+    <select id="catFilter" onchange="applyFilter()"><option value="">전체 분류</option></select>
+    <select id="typeFilter" onchange="applyFilter()"><option value="">전체 유형</option></select>
+    <select id="stockFilter" onchange="applyFilter()">
+      <option value="">재고 상태 전체</option>
+      <option value="zero">재고없음 (0)</option>
+      <option value="low">부족 (1~10)</option>
+      <option value="ok">정상 (11~100)</option>
+      <option value="high">충분 (100+)</option>
+    </select>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-outline" onclick="openQR()">📷 QR 검색</button>
+    <button class="btn btn-outline" onclick="exportCSV()">⬇ CSV 내보내기</button>
+    <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()">📂 파일 교체</button>
+  </div>
+</div>
+
+<div class="table-wrap" id="tableWrap">
+  <div class="table-header">
+    <span>총 <strong id="filteredCount">0</strong>개 품목</span>
+    <span id="pageInfo" style="font-size:11px;color:#aaa"></span>
+  </div>
+  <div class="item-list" id="itemList"></div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- Column Mapping Modal -->
+<div class="map-modal-bg" id="mapModal">
+  <div class="map-modal">
+    <div class="map-modal-head">
+      <h3>📋 컬럼 매핑 확인</h3>
+      <p>자동 감지된 컬럼을 확인하고 수정하세요</p>
+    </div>
+    <div class="map-modal-body">
+      <div id="colMapList"></div>
+      <button class="apply-btn" onclick="applyMapping()">✅ 이 설정으로 불러오기</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR Scanner Modal -->
+<div class="modal-bg" id="qrModal">
+  <div class="modal">
+    <div class="modal-head" style="background:linear-gradient(135deg,#1a5c2a,#27ae60)">
+      <h3>📷 QR / 바코드 스캔</h3>
+      <button class="modal-close" onclick="closeQR()">×</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <div style="position:relative;background:#000;aspect-ratio:1;max-height:70vw;overflow:hidden;display:flex;align-items:center;justify-content:center">
+        <video id="qrVideo" style="width:100%;height:100%;object-fit:cover" playsinline muted></video>
+        <canvas id="qrCanvas" style="display:none"></canvas>
+        <!-- 스캔 가이드 -->
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+          <div style="width:60%;aspect-ratio:1;border:3px solid rgba(39,174,96,0.9);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,0.4)"></div>
+        </div>
+        <div id="qrStatus" style="position:absolute;bottom:12px;left:0;right:0;text-align:center;color:white;font-size:13px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,0.8)">QR코드 또는 바코드를 네모 안에 맞춰주세요</div>
+      </div>
+      <div style="padding:16px">
+        <div id="qrResult" style="display:none;background:#eafaf1;border:1px solid #27ae60;border-radius:10px;padding:12px;margin-bottom:12px">
+          <div style="font-size:11px;color:#1e8449;font-weight:700;margin-bottom:4px">✅ 스캔 결과</div>
+          <div id="qrResultText" style="font-size:14px;font-weight:700;color:#0f2557;word-break:break-all"></div>
+        </div>
+        <div id="qrMatchList" style="display:none">
+          <div style="font-size:12px;color:#555;font-weight:700;margin-bottom:8px">검색된 품목</div>
+          <div id="qrMatchItems"></div>
+        </div>
+        <div id="qrNoMatch" style="display:none;text-align:center;color:#e74c3c;font-size:13px;padding:12px">일치하는 품목이 없습니다.</div>
+        <button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="resetQR()">🔄 다시 스캔</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-bg" id="detailModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modalTitle">품목 상세</h3>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid" id="detailGrid"></div>
+
+      <div class="section-title">📥 입출고 처리</div>
+      <div class="inout-form">
+        <div class="inout-row">
+          <div><label>유형</label><select id="inoutType"><option value="in">📥 입고</option><option value="out">📤 출고</option></select></div>
+          <div><label>수량</label><input type="number" id="inoutQty" placeholder="수량" min="1" inputmode="numeric"></div>
+        </div>
+        <div><label>메모 (선택)</label><input type="text" id="inoutMemo" placeholder="메모 입력"></div>
+        <button class="btn btn-primary" onclick="processInOut()">처리하기</button>
+      </div>
+
+      <div class="section-title">📋 입출고 이력</div>
+      <div id="historyList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let allData=[],filtered=[],sortCol='',sortDir=1;
+let currentPage=1;const pageSize=30;
+let colMap={},rawHeaders=[],rawRows=[];
+let history={};let currentIdx=null;
+
+const FIELD_KEYS=['code','name','spec','spec2','group','type','qty','unit','loc','cat','cat2','cat3','barcode','supplier','warehouse'];
+const FIELD_LABELS=['품목코드','품목명','규격','세부규격','품목계정그룹','자재유형','총재고','단위','위치정보','대분류','중분류','소분류','바코드','주거래처','원자재창고'];
+const DETECT={
+  code:['품목','코드','item','code','자재번호','품번'],
+  name:['품목명','명칭','name','품명'],
+  spec:['규격','spec','사양'],
+  spec2:['세부규격','세부'],
+  group:['계정','그룹','group'],
+  type:['유형','type','자재유형'],
+  qty:['재고','수량','qty','stock','총재고'],
+  unit:['단위','unit'],
+  loc:['위치','location','loc'],
+  cat:['대분류','category','분류'],
+  cat2:['중분류'],cat3:['소분류'],
+  barcode:['바코드','barcode'],
+  supplier:['거래처','supplier','vendor','주거래'],
+  warehouse:['창고','warehouse','원자재']
+};
+
+function detectCol(headers){
+  const map={};
+  FIELD_KEYS.forEach(key=>{
+    const kws=DETECT[key];
+    for(let i=0;i<headers.length;i++){
+      const h=(headers[i]||'').toString().toLowerCase().replace(/\s/g,'');
+      if(kws.some(k=>h.includes(k.toLowerCase()))){if(!map[key])map[key]=i;}
+    }
+  });
+  return map;
+}
+
+function readFile(file){
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='csv'){
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        let text;
+        try{text=new TextDecoder('euc-kr').decode(e.target.result);}
+        catch{text=new TextDecoder('utf-8').decode(e.target.result);}
+        const wb=XLSX.read(text,{type:'string'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        if(rows.length<2){alert('데이터가 없습니다.');return;}
+        rawHeaders=rows[0].map(h=>(h||'').toString().trim());
+        rawRows=rows.slice(1);colMap=detectCol(rawHeaders);showMapModal();
+      }catch(err){alert('오류: '+err.message);}
+    };
+    reader.readAsArrayBuffer(file);
+  }else{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const data=new Uint8Array(e.target.result);
+        const wb=XLSX.read(data,{type:'array',codepage:949});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        if(rows.length<2){alert('데이터가 없습니다.');return;}
+        rawHeaders=rows[0].map(h=>(h||'').toString().trim());
+        rawRows=rows.slice(1);colMap=detectCol(rawHeaders);showMapModal();
+      }catch(err){alert('오류: '+err.message);}
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+function showMapModal(){
+  const list=document.getElementById('colMapList');
+  list.innerHTML='';
+  FIELD_KEYS.forEach((key,ki)=>{
+    const div=document.createElement('div');
+    div.className='col-map-item';
+    let opts=`<option value="">-- 없음 --</option>`;
+    rawHeaders.forEach((h,i)=>{
+      const sel=colMap[key]===i?'selected':'';
+      opts+=`<option value="${i}" ${sel}>${h||'(빈 컬럼 '+i+')'}</option>`;
+    });
+    div.innerHTML=`<label>${FIELD_LABELS[ki]}</label><select id="cmap_${key}">${opts}</select>`;
+    list.appendChild(div);
+  });
+  document.getElementById('mapModal').classList.add('show');
+}
+
+function applyMapping(){
+  FIELD_KEYS.forEach(key=>{
+    const el=document.getElementById('cmap_'+key);
+    colMap[key]=el.value!==''?parseInt(el.value):undefined;
+  });
+  document.getElementById('mapModal').classList.remove('show');
+  parseData();
+}
+
+function g(row,key){
+  if(colMap[key]===undefined)return'';
+  return(row[colMap[key]]||'').toString().trim();
+}
+
+function parseData(){
+  allData=rawRows.map((row,i)=>({
+    _idx:i,
+    code:g(row,'code'),name:g(row,'name'),spec:g(row,'spec'),spec2:g(row,'spec2'),
+    group:g(row,'group'),type:g(row,'type'),
+    qty:parseFloat(g(row,'qty').replace(/,/g,''))||0,
+    unit:g(row,'unit'),loc:g(row,'loc'),cat:g(row,'cat'),cat2:g(row,'cat2'),
+    cat3:g(row,'cat3'),barcode:g(row,'barcode'),supplier:g(row,'supplier'),warehouse:g(row,'warehouse')
+  })).filter(r=>r.code||r.name);
+  updateDashboard();populateFilters();applyFilter();
+  document.getElementById('uploadArea').style.display='none';
+  document.getElementById('controls').style.display='flex';
+  document.getElementById('tableWrap').style.display='block';
+}
+
+function updateDashboard(){
+  const total=allData.length;
+  const totalQty=allData.reduce((s,r)=>s+getEffQty(r),0);
+  const low=allData.filter(r=>getEffQty(r)<=10).length;
+  const cats=new Set(allData.map(r=>r.cat).filter(Boolean)).size;
+  document.getElementById('totalItems').textContent=total.toLocaleString();
+  document.getElementById('totalQty').textContent=totalQty>=10000?(totalQty/10000).toFixed(1)+'만':totalQty.toLocaleString();
+  document.getElementById('lowItems').textContent=low.toLocaleString();
+  document.getElementById('categories').textContent=cats.toLocaleString();
+}
+
+function populateFilters(){
+  const cats=[...new Set(allData.map(r=>r.cat).filter(Boolean))].sort();
+  const types=[...new Set(allData.map(r=>r.type).filter(Boolean))].sort();
+  document.getElementById('catFilter').innerHTML='<option value="">전체 분류</option>'+cats.map(c=>`<option>${c}</option>`).join('');
+  document.getElementById('typeFilter').innerHTML='<option value="">전체 유형</option>'+types.map(t=>`<option>${t}</option>`).join('');
+}
+
+function applyFilter(){
+  const q=document.getElementById('searchInput').value.toLowerCase();
+  const cat=document.getElementById('catFilter').value;
+  const type=document.getElementById('typeFilter').value;
+  const stock=document.getElementById('stockFilter').value;
+  filtered=allData.filter(r=>{
+    if(q&&!`${r.code} ${r.name} ${r.spec}`.toLowerCase().includes(q))return false;
+    if(cat&&r.cat!==cat)return false;
+    if(type&&r.type!==type)return false;
+    const qty=getEffQty(r);
+    if(stock==='zero'&&qty!==0)return false;
+    if(stock==='low'&&(qty<=0||qty>10))return false;
+    if(stock==='ok'&&(qty<=10||qty>100))return false;
+    if(stock==='high'&&qty<=100)return false;
+    return true;
+  });
+  currentPage=1;renderList();
+}
+
+function getEffQty(r){
+  const h=history[r._idx];
+  if(!h||!h.length)return r.qty;
+  return r.qty+h.reduce((s,e)=>s+(e.type==='in'?e.qty:-e.qty),0);
+}
+
+function stockStatus(qty){
+  if(qty<=0)return{label:'재고없음',cls:'badge-zero'};
+  if(qty<=10)return{label:'부족',cls:'badge-low'};
+  if(qty<=100)return{label:'정상',cls:'badge-ok'};
+  return{label:'충분',cls:'badge-high'};
+}
+
+function renderList(){
+  const total=filtered.length;
+  const pages=Math.ceil(total/pageSize)||1;
+  const start=(currentPage-1)*pageSize;
+  const slice=filtered.slice(start,start+pageSize);
+  document.getElementById('filteredCount').textContent=total.toLocaleString();
+  document.getElementById('pageInfo').textContent=`${currentPage}/${pages} 페이지`;
+  const il=document.getElementById('itemList');
+  if(!slice.length){
+    il.innerHTML=`<div class="empty"><div class="empty-icon">📭</div><p>검색 결과가 없습니다.</p></div>`;
+  }else{
+    il.innerHTML=slice.map(r=>{
+      const qty=getEffQty(r);const st=stockStatus(qty);
+      return`<div class="item-card" onclick="openDetail(${r._idx})">
+        <div class="item-main">
+          <div class="item-code">${r.code}</div>
+          <div class="item-name">${r.name}</div>
+          <div class="item-spec">${[r.spec,r.cat].filter(Boolean).join(' · ')}</div>
+        </div>
+        <div class="item-right">
+          <div class="item-qty">${qty.toLocaleString()}</div>
+          <div class="item-unit">${r.unit}</div>
+          <span class="badge ${st.cls}">${st.label}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  // pagination
+  const pg=document.getElementById('pagination');
+  if(pages<=1){pg.innerHTML='';return;}
+  let btns='';
+  if(currentPage>1)btns+=`<button class="page-btn" onclick="goPage(${currentPage-1})">‹ 이전</button>`;
+  for(let i=Math.max(1,currentPage-2);i<=Math.min(pages,currentPage+2);i++)
+    btns+=`<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  if(currentPage<pages)btns+=`<button class="page-btn" onclick="goPage(${currentPage+1})">다음 ›</button>`;
+  pg.innerHTML=btns;
+}
+
+function goPage(p){currentPage=p;renderList();window.scrollTo(0,0);}
+
+function openDetail(idx){
+  currentIdx=idx;
+  const r=allData.find(d=>d._idx===idx);
+  document.getElementById('modalTitle').textContent=r.name;
+  const grid=document.getElementById('detailGrid');
+  const fields=[
+    ['품목코드',r.code],['품목명',r.name],['규격',r.spec],['세부규격',r.spec2],
+    ['자재유형',r.type],['품목계정그룹',r.group],
+    ['현재 재고',getEffQty(r).toLocaleString()+' '+r.unit],['단위',r.unit],
+    ['대분류',r.cat],['중분류',r.cat2],['소분류',r.cat3],['바코드',r.barcode],
+    ['주거래처',r.supplier],['원자재창고',r.warehouse]
+  ];
+  grid.innerHTML=fields.map(([k,v])=>`<div class="detail-item"><label>${k}</label><span>${v||'-'}</span></div>`).join('');
+  renderHistory(idx);
+  document.getElementById('detailModal').classList.add('show');
+  document.body.style.overflow='hidden';
+}
+
+function renderHistory(idx){
+  const h=history[idx]||[];
+  const hl=document.getElementById('historyList');
+  if(!h.length){hl.innerHTML=`<div style="text-align:center;color:#aaa;padding:16px;font-size:13px">입출고 이력 없음</div>`;return;}
+  hl.innerHTML=[...h].reverse().map(e=>`
+    <div class="history-item">
+      <div class="history-left">
+        <div class="h-type ${e.type}">${e.type==='in'?'📥 입고':'📤 출고'}</div>
+        <div class="h-time">${e.time}</div>
+        ${e.memo?`<div class="h-memo">${e.memo}</div>`:''}
+      </div>
+      <div class="history-right">
+        <div class="h-qty ${e.type}">${e.type==='in'?'+':'-'}${e.qty.toLocaleString()}</div>
+        <div class="h-after">→ ${e.after.toLocaleString()}</div>
+      </div>
+    </div>`).join('');
+}
+
+function processInOut(){
+  const type=document.getElementById('inoutType').value;
+  const qty=parseInt(document.getElementById('inoutQty').value);
+  const memo=document.getElementById('inoutMemo').value;
+  if(!qty||qty<=0){alert('수량을 올바르게 입력하세요.');return;}
+  const r=allData.find(d=>d._idx===currentIdx);
+  const before=getEffQty(r);
+  if(type==='out'&&qty>before){alert('출고 수량이 재고보다 많습니다.');return;}
+  const after=type==='in'?before+qty:before-qty;
+  if(!history[currentIdx])history[currentIdx]=[];
+  history[currentIdx].push({type,qty,after,memo,time:new Date().toLocaleString('ko-KR')});
+  document.getElementById('inoutQty').value='';
+  document.getElementById('inoutMemo').value='';
+  renderHistory(currentIdx);
+  updateDashboard();renderList();
+}
+
+function closeModal(){
+  document.getElementById('detailModal').classList.remove('show');
+  document.body.style.overflow='';
+}
+
+function exportCSV(){
+  const header=['품목코드','품목명','규격','자재유형','현재고','단위','대분류','상태'];
+  const rows=filtered.map(r=>{
+    const qty=getEffQty(r);
+    return[r.code,r.name,r.spec,r.type,qty,r.unit,r.cat,stockStatus(qty).label];
+  });
+  const csv=[header,...rows].map(r=>r.join(',')).join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='재고현황_'+new Date().toLocaleDateString('ko-KR').replace(/\./g,'').replace(/ /g,'')+'.csv';
+  a.click();
+}
+
+// ── QR Scanner ──────────────────────────────
+let qrStream=null,qrAnimId=null,qrDone=false;
+
+function openQR(){
+  if(allData.length===0){alert('먼저 재고 파일을 업로드해 주세요.');return;}
+  document.getElementById('qrModal').classList.add('show');
+  document.body.style.overflow='hidden';
+  qrDone=false;
+  document.getElementById('qrResult').style.display='none';
+  document.getElementById('qrMatchList').style.display='none';
+  document.getElementById('qrNoMatch').style.display='none';
+  startCamera();
+}
+
+async function startCamera(){
+  const video=document.getElementById('qrVideo');
+  try{
+    qrStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}
+    });
+    video.srcObject=qrStream;
+    await video.play();
+    scanLoop();
+  }catch(e){
+    document.getElementById('qrStatus').textContent='카메라 접근 권한이 필요합니다. 브라우저 설정을 확인해 주세요.';
+  }
+}
+
+function scanLoop(){
+  if(qrDone)return;
+  const video=document.getElementById('qrVideo');
+  const canvas=document.getElementById('qrCanvas');
+  if(video.readyState===video.HAVE_ENOUGH_DATA){
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+    const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:'dontInvert'});
+    if(code){
+      qrDone=true;
+      handleQRResult(code.data);
+      return;
+    }
+  }
+  qrAnimId=requestAnimationFrame(scanLoop);
+}
+
+function handleQRResult(text){
+  document.getElementById('qrStatus').textContent='✅ 스캔 완료!';
+  document.getElementById('qrResultText').textContent=text;
+  document.getElementById('qrResult').style.display='block';
+
+  // 품목코드, 바코드, 품목명으로 매칭
+  const q=text.trim().toLowerCase();
+  const matches=allData.filter(r=>
+    r.code.toLowerCase()===q||
+    r.barcode.toLowerCase()===q||
+    r.name.toLowerCase().includes(q)||
+    r.code.toLowerCase().includes(q)
+  );
+
+  if(matches.length>0){
+    document.getElementById('qrMatchList').style.display='block';
+    document.getElementById('qrMatchItems').innerHTML=matches.map(r=>{
+      const qty=getEffQty(r);const st=stockStatus(qty);
+      return`<div class="item-card" style="border:1px solid #e0e8f0;border-radius:10px;margin-bottom:8px" onclick="closeQR();openDetail(${r._idx})">
+        <div class="item-main">
+          <div class="item-code">${r.code}</div>
+          <div class="item-name">${r.name}</div>
+          <div class="item-spec">${r.spec||''}</div>
+        </div>
+        <div class="item-right">
+          <div class="item-qty">${qty.toLocaleString()}</div>
+          <div class="item-unit">${r.unit}</div>
+          <span class="badge ${st.cls}">${st.label}</span>
+        </div>
+      </div>`;
+    }).join('');
+    // 단일 결과면 바로 상세 열기
+    if(matches.length===1){
+      setTimeout(()=>{closeQR();openDetail(matches[0]._idx);},600);
+    }
+  }else{
+    document.getElementById('qrNoMatch').style.display='block';
+    // 검색창에 텍스트 채워주기
+    document.getElementById('searchInput').value=text;
+    applyFilter();
+  }
+}
+
+function resetQR(){
+  qrDone=false;
+  document.getElementById('qrResult').style.display='none';
+  document.getElementById('qrMatchList').style.display='none';
+  document.getElementById('qrNoMatch').style.display='none';
+  document.getElementById('qrStatus').textContent='QR코드 또는 바코드를 네모 안에 맞춰주세요';
+  scanLoop();
+}
+
+function closeQR(){
+  if(qrAnimId)cancelAnimationFrame(qrAnimId);
+  if(qrStream)qrStream.getTracks().forEach(t=>t.stop());
+  qrStream=null;qrAnimId=null;qrDone=false;
+  const video=document.getElementById('qrVideo');
+  video.srcObject=null;
+  document.getElementById('qrModal').classList.remove('show');
+  document.body.style.overflow='';
+}
+document.getElementById('qrModal').addEventListener('click',e=>{if(e.target===document.getElementById('qrModal'))closeQR();});
+// ────────────────────────────────────────────
+
+const dz=document.querySelector('.drop-zone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='#1a3a8f';});
+dz.addEventListener('dragleave',()=>dz.style.borderColor='');
+dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='';const f=e.dataTransfer.files[0];if(f)readFile(f);});
+document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files[0])readFile(e.target.files[0]);e.target.value='';});
+document.getElementById('detailModal').addEventListener('click',e=>{if(e.target===document.getElementById('detailModal'))closeModal();});
+
+// PWA Service Worker 등록
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='#1a3a8f';});
+dz.addEventListener('dragleave',()=>dz.style.borderColor='');
+dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='';const f=e.dataTransfer.files[0];if(f)readFile(f);});
+document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files[0])readFile(e.target.files[0]);e.target.value='';});
+document.getElementById('detailModal').addEventListener('click',e=>{if(e.target===document.getElementById('detailModal'))closeModal();});
+</script>
+</body>
+</html>
