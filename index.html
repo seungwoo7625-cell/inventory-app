@@ -551,7 +551,7 @@ function exportCSV(){
 }
 
 // ── QR Scanner ──────────────────────────────
-let qrStream=null,qrAnimId=null,qrDone=false;
+let qrStream=null,qrAnimId=null,qrDone=false,qrInterval=null;
 
 function openQR(){
   if(allData.length===0){alert('먼저 재고 파일을 업로드해 주세요.');return;}
@@ -572,47 +572,33 @@ async function startCamera(){
     });
     video.srcObject=qrStream;
     await video.play();
-    scanLoop();
+    // requestAnimationFrame 대신 setInterval로 안정적으로 반복
+    if(qrInterval)clearInterval(qrInterval);
+    qrInterval=setInterval(scanFrame,200);
   }catch(e){
-    document.getElementById('qrStatus').textContent='카메라 접근 권한이 필요합니다. 브라우저 설정을 확인해 주세요.';
+    document.getElementById('qrStatus').textContent='카메라 접근 권한이 필요합니다.';
   }
 }
 
-function scanLoop(){
+function scanFrame(){
   if(qrDone)return;
   const video=document.getElementById('qrVideo');
   const canvas=document.getElementById('qrCanvas');
-  if(video.readyState===video.HAVE_ENOUGH_DATA){
-    const vw=video.videoWidth, vh=video.videoHeight;
-    // 중앙 80% 영역만 크롭해서 인식률 향상
-    const cropSize=Math.min(vw,vh)*0.8;
-    const cx=(vw-cropSize)/2, cy=(vh-cropSize)/2;
-    canvas.width=cropSize; canvas.height=cropSize;
-    const ctx=canvas.getContext('2d');
-    ctx.drawImage(video,cx,cy,cropSize,cropSize,0,0,cropSize,cropSize);
-
-    // 밝기/대비 보정
-    const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
-    const d=imgData.data;
-    for(let i=0;i<d.length;i+=4){
-      // 그레이스케일 + 대비 강화
-      const avg=(d[i]+d[i+1]+d[i+2])/3;
-      const v=avg>128?Math.min(255,avg*1.2):Math.max(0,avg*0.8);
-      d[i]=d[i+1]=d[i+2]=v;
-    }
-    ctx.putImageData(imgData,0,0);
-    const enhanced=ctx.getImageData(0,0,canvas.width,canvas.height);
-
-    // 일반 + 반전 둘 다 시도
-    let code=jsQR(enhanced.data,canvas.width,canvas.height,{inversionAttempts:'attemptBoth'});
-    if(code){
-      qrDone=true;
-      if(navigator.vibrate)navigator.vibrate(100);
-      handleQRResult(code.data);
-      return;
-    }
+  if(!video||video.readyState!==video.HAVE_ENOUGH_DATA)return;
+  const vw=video.videoWidth,vh=video.videoHeight;
+  if(!vw||!vh)return;
+  const cropSize=Math.min(vw,vh)*0.8;
+  const cx=(vw-cropSize)/2,cy=(vh-cropSize)/2;
+  canvas.width=cropSize;canvas.height=cropSize;
+  const ctx=canvas.getContext('2d');
+  ctx.drawImage(video,cx,cy,cropSize,cropSize,0,0,cropSize,cropSize);
+  const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+  const code=jsQR(imgData.data,canvas.width,canvas.height,{inversionAttempts:'attemptBoth'});
+  if(code&&code.data){
+    qrDone=true;
+    if(navigator.vibrate)navigator.vibrate(100);
+    handleQRResult(code.data);
   }
-  qrAnimId=requestAnimationFrame(scanLoop);
 }
 
 function handleQRResult(text){
@@ -663,8 +649,13 @@ function resetQR(){
   document.getElementById('qrResult').style.display='none';
   document.getElementById('qrMatchList').style.display='none';
   document.getElementById('qrNoMatch').style.display='none';
-  document.getElementById('qrStatus').textContent='QR코드 또는 바코드를 네모 안에 맞춰주세요';
-  scanLoop();
+  document.getElementById('qrStatus').textContent='QR코드를 네모 안에 맞춰주세요';
+  // 카메라 스트림 완전히 재시작
+  if(qrStream)qrStream.getTracks().forEach(t=>t.stop());
+  qrStream=null;
+  if(qrAnimId)cancelAnimationFrame(qrAnimId);
+  qrAnimId=null;
+  startCamera();
 }
 
 function closeQR(){
