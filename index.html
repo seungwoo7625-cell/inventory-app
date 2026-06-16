@@ -216,30 +216,52 @@ select{padding:11px 10px;border:1px solid #d0d8e8;border-radius:10px;font-size:1
 <div class="modal-bg" id="qrModal">
   <div class="modal">
     <div class="modal-head" style="background:linear-gradient(135deg,#1a5c2a,#27ae60)">
-      <h3>📷 QR / 바코드 스캔</h3>
+      <h3>📷 QR 코드 스캔</h3>
       <button class="modal-close" onclick="closeQR()">×</button>
     </div>
-    <div class="modal-body" style="padding:0">
-      <div style="position:relative;background:#000;aspect-ratio:1;max-height:70vw;overflow:hidden;display:flex;align-items:center;justify-content:center">
-        <video id="qrVideo" style="width:100%;height:100%;object-fit:cover" playsinline muted></video>
-        <canvas id="qrCanvas" style="display:none"></canvas>
-        <!-- 스캔 가이드 -->
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-          <div style="width:60%;aspect-ratio:1;border:3px solid rgba(39,174,96,0.9);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,0.4)"></div>
+    <div class="modal-body">
+      <canvas id="qrCanvas" style="display:none"></canvas>
+      <input type="file" id="qrFileInput" accept="image/*" capture="environment" style="display:none">
+
+      <!-- 초기 화면 -->
+      <div id="qrHome">
+        <div style="text-align:center;padding:24px 0 16px">
+          <div style="font-size:56px;margin-bottom:12px">📷</div>
+          <p style="font-size:15px;color:#333;font-weight:600;margin-bottom:6px">QR코드를 촬영하세요</p>
+          <p style="font-size:13px;color:#888">카메라로 QR코드를 찍으면 자동으로 품목을 검색합니다</p>
         </div>
-        <div id="qrStatus" style="position:absolute;bottom:12px;left:0;right:0;text-align:center;color:white;font-size:13px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,0.8)">QR코드 또는 바코드를 네모 안에 맞춰주세요</div>
+        <button class="btn btn-primary" style="width:100%;padding:15px;font-size:15px;margin-bottom:10px" onclick="document.getElementById('qrFileInput').click()">
+          📸 카메라로 촬영
+        </button>
+        <button class="btn btn-outline" style="width:100%;padding:13px;font-size:14px" onclick="document.getElementById('qrFileInput').removeAttribute('capture');document.getElementById('qrFileInput').click();document.getElementById('qrFileInput').setAttribute('capture','environment')">
+          🖼 갤러리에서 선택
+        </button>
       </div>
-      <div style="padding:16px">
-        <div id="qrResult" style="display:none;background:#eafaf1;border:1px solid #27ae60;border-radius:10px;padding:12px;margin-bottom:12px">
+
+      <!-- 미리보기 + 결과 -->
+      <div id="qrPreview" style="display:none">
+        <div style="position:relative;margin-bottom:12px;border-radius:10px;overflow:hidden;background:#000">
+          <img id="qrImg" style="width:100%;display:block;max-height:280px;object-fit:contain">
+          <div id="qrOverlay" style="display:none;position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <div style="background:rgba(39,174,96,0.85);color:white;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700">✅ QR 인식됨</div>
+          </div>
+        </div>
+
+        <div id="qrResult" style="display:none;background:#eafaf1;border:1px solid #27ae60;border-radius:10px;padding:12px;margin-bottom:10px">
           <div style="font-size:11px;color:#1e8449;font-weight:700;margin-bottom:4px">✅ 스캔 결과</div>
           <div id="qrResultText" style="font-size:14px;font-weight:700;color:#0f2557;word-break:break-all"></div>
         </div>
-        <div id="qrMatchList" style="display:none">
-          <div style="font-size:12px;color:#555;font-weight:700;margin-bottom:8px">검색된 품목</div>
+        <div id="qrMatchList" style="display:none;margin-bottom:10px">
+          <div style="font-size:12px;color:#555;font-weight:700;margin-bottom:8px">🔍 검색된 품목</div>
           <div id="qrMatchItems"></div>
         </div>
-        <div id="qrNoMatch" style="display:none;text-align:center;color:#e74c3c;font-size:13px;padding:12px">일치하는 품목이 없습니다.</div>
-        <button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="resetQR()">🔄 다시 스캔</button>
+        <div id="qrNoMatch" style="display:none;background:#fdecea;border:1px solid #e74c3c;border-radius:10px;padding:12px;text-align:center;color:#c0392b;font-size:13px;margin-bottom:10px">
+          일치하는 품목이 없습니다.
+        </div>
+        <div id="qrFail" style="display:none;background:#fff8e1;border:1px solid #f39c12;border-radius:10px;padding:12px;text-align:center;color:#856404;font-size:13px;margin-bottom:10px">
+          QR코드를 인식하지 못했습니다.<br>더 밝은 곳에서 다시 촬영해 주세요.
+        </div>
+        <button class="btn btn-primary" style="width:100%;padding:13px;font-size:14px" onclick="resetQR()">🔄 다시 스캔</button>
       </div>
     </div>
   </div>
