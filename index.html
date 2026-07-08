@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="재고관리">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/@zxing/browser@latest/umd/index.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0f2f5;color:#1a2340;font-size:14px}
@@ -186,19 +186,9 @@ select{padding:11px 10px;border:1px solid #d0d8e8;border-radius:10px;font-size:1
       <h3>📷 QR 코드 스캔</h3>
       <button class="modal-close" id="qrCloseBtn">×</button>
     </div>
-    <div style="position:relative;background:#000;width:100%;aspect-ratio:1;max-height:60vw;overflow:hidden">
-      <video id="qrVideo" style="width:100%;height:100%;object-fit:cover;display:block" playsinline muted autoplay></video>
-      <!-- 가이드 -->
-      <div style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center">
-        <div style="width:60%;aspect-ratio:1;position:relative">
-          <div style="position:absolute;top:0;left:0;width:20px;height:20px;border-top:3px solid #2ecc71;border-left:3px solid #2ecc71"></div>
-          <div style="position:absolute;top:0;right:0;width:20px;height:20px;border-top:3px solid #2ecc71;border-right:3px solid #2ecc71"></div>
-          <div style="position:absolute;bottom:0;left:0;width:20px;height:20px;border-bottom:3px solid #2ecc71;border-left:3px solid #2ecc71"></div>
-          <div style="position:absolute;bottom:0;right:0;width:20px;height:20px;border-bottom:3px solid #2ecc71;border-right:3px solid #2ecc71"></div>
-          <div id="scanLine" style="position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#2ecc71,transparent);animation:scanAnim 2s ease-in-out infinite"></div>
-        </div>
-      </div>
-      <div id="qrStatus" style="position:absolute;bottom:10px;left:0;right:0;text-align:center;color:white;font-size:12px;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,1);padding:0 12px">카메라 시작 중...</div>
+    <div style="position:relative;background:#000;width:100%;min-height:240px">
+      <div id="qrReaderDiv" style="width:100%"></div>
+      <div id="qrStatus" style="text-align:center;color:#fff;font-size:12px;font-weight:600;padding:8px 12px;background:#111">카메라 시작 중...</div>
     </div>
     <div style="padding:14px">
       <div id="qrResult" style="display:none;background:#eafaf1;border:1px solid #27ae60;border-radius:10px;padding:12px;margin-bottom:10px">
@@ -260,7 +250,6 @@ let allData=[],filtered=[],currentPage=1;
 const pageSize=30;
 let colMap={},rawHeaders=[],rawRows=[];
 let history={},currentIdx=null;
-let zxingControls=null;
 
 const FIELD_KEYS=['code','name','spec','spec2','group','type','qty','unit','loc','cat','cat2','cat3','barcode','supplier','warehouse'];
 const FIELD_LABELS=['품목코드','품목명','규격','세부규격','품목계정그룹','자재유형','총재고','단위','위치정보','대분류','중분류','소분류','바코드','주거래처','원자재창고'];
@@ -441,7 +430,9 @@ function renderList(){
 
 function goPage(p){currentPage=p;renderList();window.scrollTo(0,0);}
 
-// ── QR 스캔 ───────────────────────────────
+// ── QR 스캔 (html5-qrcode) ───────────────────
+let html5QrCode=null, qrRunning=false, qrHandled=false;
+
 function openQR(){
   if(!allData.length){alert('먼저 재고 파일을 업로드해 주세요.');return;}
   document.getElementById('qrResult').style.display='none';
@@ -451,37 +442,40 @@ function openQR(){
   document.getElementById('qrStatus').textContent='카메라 시작 중...';
   document.getElementById('qrModal').classList.add('show');
   document.body.style.overflow='hidden';
+  qrHandled=false;
   startScan();
 }
 
 async function startScan(){
-  const video=document.getElementById('qrVideo');
   try{
-    // ZXingBrowser 로드 대기
     let t=0;
-    while(typeof ZXingBrowser==='undefined'&&t<6000){
+    while(typeof Html5Qrcode==='undefined'&&t<6000){
       await new Promise(r=>setTimeout(r,300));t+=300;
     }
-    if(typeof ZXingBrowser==='undefined'){
-      document.getElementById('qrStatus').textContent='라이브러리 로드 실패';
+    if(typeof Html5Qrcode==='undefined'){
+      document.getElementById('qrStatus').textContent='라이브러리 로드 실패. 새로고침 후 다시 시도해 주세요.';
       return;
     }
-    const reader=new ZXingBrowser.BrowserMultiFormatReader();
-    const devices=await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
-    const back=devices.find(d=>/(back|rear|environment)/i.test(d.label))||devices[devices.length-1];
-    zxingControls=await reader.decodeFromVideoDevice(
-      back?back.deviceId:undefined, video,
-      (result,err)=>{
-        if(result){
-          if(navigator.vibrate)navigator.vibrate([100]);
-          zxingControls&&zxingControls.stop();
-          handleQRResult(result.getText());
-        }
-      }
+    if(!html5QrCode){
+      html5QrCode=new Html5Qrcode('qrReaderDiv',{verbose:false});
+    }
+    qrHandled=false;
+    await html5QrCode.start(
+      {facingMode:'environment'},
+      {fps:10,qrbox:{width:230,height:230}},
+      (decodedText)=>{
+        if(qrHandled)return;
+        qrHandled=true;
+        if(navigator.vibrate)navigator.vibrate(100);
+        stopScan();
+        handleQRResult(decodedText);
+      },
+      ()=>{}
     );
+    qrRunning=true;
     document.getElementById('qrStatus').textContent='QR코드를 네모 안에 맞춰주세요';
   }catch(e){
-    document.getElementById('qrStatus').textContent='카메라 오류: '+e.message;
+    document.getElementById('qrStatus').textContent='카메라 오류: '+(e&&e.message?e.message:e);
   }
 }
 
@@ -495,13 +489,11 @@ function restartScan(){
 }
 
 function stopScan(){
-  try{if(zxingControls)zxingControls.stop();}catch(e){}
-  zxingControls=null;
-  const video=document.getElementById('qrVideo');
-  if(video&&video.srcObject){
-    video.srcObject.getTracks().forEach(t=>t.stop());
-    video.srcObject=null;
+  if(html5QrCode&&qrRunning){
+    qrRunning=false;
+    return html5QrCode.stop().catch(()=>{});
   }
+  return Promise.resolve();
 }
 
 function closeQR(){
@@ -509,6 +501,7 @@ function closeQR(){
   document.getElementById('qrModal').classList.remove('show');
   document.body.style.overflow='';
 }
+// ─────────────────────────────────────────
 
 function handleQRResult(text){
   document.getElementById('qrStatus').textContent='✅ 인식 완료!';
